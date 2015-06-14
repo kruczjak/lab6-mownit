@@ -11,16 +11,18 @@ dir = "text/"
 bag_of_words = {}
 texts = []
 
+
 def update_progress(progress, max, time):
     proc = (100 * progress) / max
-    print '\r[{0}]{4}% {1}/{2} time: {3}ms'.format('#'*(proc/5), progress, max - 1, time*1000, proc),
+    print '\r[{0}]{4}% {1}/{2} time: {3}ms'.format('#' * (proc / 5), progress, max - 1, time * 1000, proc),
+
 
 def prepare(text):
     return text.replace(",", "").replace(".", "").replace(" - ", " ").replace("\'", " ").lower().split()
 
+
 query = raw_input("Wyraz: ")
 k = int(raw_input("Ilosc wynikow: "))
-
 
 path, dirs, files = os.walk(dir).next()
 text_count = len(files) - 1
@@ -30,7 +32,7 @@ print "Number of files: " + str(text_count)
 main_start_time = start_time = time.time()
 print "Rozpoczynam czytanie"
 for i in range(text_count):
-    file = open(dir + str(i+1) + ".txt")
+    file = open(dir + str(i + 1) + ".txt")
     texts.append(set(prepare(file.read())))
     file.close()
     update_progress(i, text_count, time.time() - start_time)
@@ -59,10 +61,10 @@ for i in range(text_count):
 # 5
 start_time = time.time()
 print "\nObliczanie inverse document frequency"
-idf = [0]*N
+idf = [0] * N
 for i in range(N):
     idf[i] = term_by_document[i, :].getnnz()
-    idf[i] = numpy.log(T/idf[i])
+    idf[i] = numpy.log(T / idf[i])
     update_progress(i, N, time.time() - start_time)
 
 # przemnazanie przez IDF
@@ -78,7 +80,7 @@ start_time = time.time()
 print "\nLow-rank approx with SVD"
 (U, S, V) = svd(term_by_document, k=k)
 term_by_document = lil_matrix(U.dot(diag(S)).dot(V))
-print "Full time: " + str((time.time() - start_time)*1000)
+print "Full time: " + str((time.time() - start_time) * 1000)
 
 # 7
 start_time = time.time()
@@ -86,7 +88,7 @@ print "Normalizacja kazdego wektora do 1"
 for i in range(T):
     vect = term_by_document[i, :]
     length = vect.dot(vect.transpose())[0, 0]
-    term_by_document[i, :] = numpy.multiply(vect, 1/length)
+    term_by_document[i, :] = numpy.multiply(vect, 1 / length)
     update_progress(i, T, time.time() - start_time)
 
 # 6
@@ -105,14 +107,14 @@ query_length = query_vector.getnnz()
 if query_length == 0:
     raise KeyError('Brak wyszukanych slow :(')
 
-query_vector = numpy.multiply(query_vector, 1/query_length)
+query_vector = numpy.multiply(query_vector, 1 / query_length)
 
 result = query_vector.transpose().dot(term_by_document)
 
 print "Wyniki:"
 data = result.data
-max = sorted(data)[(text_count-k):]
+max = sorted(data)[(text_count - k):]
 for i in range(text_count):
     if result[0, i] in max:
         print i
-print "Total: " + str((time.time() - time)*1000)
+print "Total: " + str((time.time() - time) * 1000)
