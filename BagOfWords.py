@@ -1,4 +1,4 @@
-from scipy.sparse import lil_matrix, csr_matrix
+from scipy.sparse import lil_matrix
 from scipy.sparse.linalg import svds as svd
 from numpy import diag
 import numpy as numpy
@@ -56,9 +56,6 @@ for i in range(text_count):
         term_by_document[bag_of_words[word], i] += 1
     update_progress(i, text_count, time.time() - start_time)
 
-# N = len(bag_of_words)
-# T = len(texts)
-
 # 5
 start_time = time.time()
 print "\nObliczanie inverse document frequency"
@@ -70,7 +67,7 @@ for i in range(N):
 
 # przemnazanie przez IDF
 start_time = time.time()
-print "\nNormalization with IDF"
+print "\nNormalizacja z uzyciem inverse document frequency"
 for i in range(N):
     for j in range(T):
         term_by_document[i, j] *= idf[i]
@@ -78,41 +75,39 @@ for i in range(N):
 
 # 8
 start_time = time.time()
-print "\nLow-rank approximation with SVD"
-(U, S, V) = svd(term_by_document, k=k)              # low rank approximation
+print "\nLow-rank approx with SVD"
+(U, S, V) = svd(term_by_document, k=k)
 term_by_document = lil_matrix(U.dot(diag(S)).dot(V))
-print "Full time: " + (time.time() - start_time)*1000
+print "Full time: " + str((time.time() - start_time)*1000)
 
 # 7
 start_time = time.time()
-print "Normalizing each text-vector to one"
-for i in range(T):                                  # normalization - BOW-vector for each text has length 1
+print "Normalizacja kazdego wektora do 1"
+for i in range(T):
     vect = term_by_document[i, :]
     length = vect.dot(vect.transpose())[0, 0]
     term_by_document[i, :] = numpy.multiply(vect, 1/length)
     update_progress(i, T, time.time() - start_time)
 
-#########################################
-
 # 6
 print "\nWyszukiwanie"
 query_vector = lil_matrix((N, 1))
-for word in prepare(query):                         # preparing query vector
+for word in prepare(query):
     query_vector[bag_of_words[word], 0] += 1
 
 try:
-    for i in range(N):                                  # query vector IDF normalization
+    for i in range(N):
         query_vector[i, 0] *= idf[i]
 except KeyError:
     pass
 
-query_length = query_vector.getnnz()                # query vector normalization
-if query_vector == 0:
-    raise KeyError('No of key words in bag-of-words')
+query_length = query_vector.getnnz()
+if query_length == 0:
+    raise KeyError('Brak wyszukanych slow :(')
 
 query_vector = numpy.multiply(query_vector, 1/query_length)
 
-result = query_vector.transpose().dot(term_by_document)     # ask Google
+result = query_vector.transpose().dot(term_by_document)
 
 print "Wyniki:"
 data = result.data
