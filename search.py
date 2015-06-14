@@ -58,8 +58,8 @@ for i in range(text_count):
         term_by_document[bag_of_words[word], i] += 1
     update_progress(i, text_count, time.time() - start_time)
 
-N = len(bag_of_words)
-T = len(texts)
+# N = len(bag_of_words)
+# T = len(texts)
 # 5
 start_time = time.time()
 print "\nObliczanie inverse document frequency"
@@ -92,7 +92,8 @@ for i in range(T):
     vec = term_by_document[i, :]
     vec_t = vec.transpose()
     length = vec.dot(vec_t)[0, 0]
-    term_by_document[i, :] = numpy.multiply(vec, 1 / length)
+    if length != 0:
+        term_by_document[i, :] = numpy.multiply(vec, 1 / length)
     update_progress(i, T, time.time() - start_time)
 
 # 6
@@ -101,11 +102,15 @@ query_vector = lil_matrix((N, 1))
 for word in prepare(query):
     query_vector[bag_of_words[word], 0] += 1
 
-try:
-    for i in range(N):
+print query_vector
+
+for i in range(N):
+    try:
         query_vector[i, 0] *= idf[i]
-except KeyError:
-    pass
+    except KeyError:
+        pass
+
+print query_vector
 
 query_length = query_vector.getnnz()
 if query_length == 0:
@@ -120,4 +125,4 @@ maximum = sorted(data)[(text_count - k):]
 for i in range(text_count):
     if result[0, i] in maximum:
         print i
-print "Total: " + str((time.time() - time) * 1000)
+print "Total: " + str((time.time() - main_start_time) * 1000)
