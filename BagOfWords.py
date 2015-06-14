@@ -3,34 +3,41 @@ from scipy.sparse.linalg import svds as svd
 from numpy import diag
 import numpy as numpy
 import time
+import os
 
 __author__ = 'kruczjak'
 
+dir = "text/"
 bag_of_words = {}
 texts = []
 
 def update_progress(progress, max, time):
-    print '\r[{0}] {1}/{2} time: {3}ms'.format('#'*(progress/10), progress, max, time*1000)
+    proc = (100 * progress) / max
+    print '\r[{0}]{4}% {1}/{2} time: {3}ms'.format('#'*(proc/5), progress, max - 1, time*1000, proc),
 
 def prepare(text):
     return text.replace(",", "").replace(".", "").replace(" - ", " ").replace("\'", " ").lower().split()
 
-
-text_count = int(raw_input("Il. plikow tekstowych: "))
 query = raw_input("Wyraz: ")
 k = int(raw_input("Ilosc wynikow: "))
+
+
+path, dirs, files = os.walk(dir).next()
+text_count = len(files) - 1
+
+print "Number of files: " + str(text_count)
 
 main_start_time = start_time = time.time()
 print "Rozpoczynam czytanie"
 for i in range(text_count):
-    file = open("texts/texts/"+str(i+1)+".txt")
+    file = open(dir + str(i+1) + ".txt")
     texts.append(set(prepare(file.read())))
     file.close()
     update_progress(i, text_count, time.time() - start_time)
 
 # 2, 3
 start_time = time.time()
-print "Tworzenie bag of words"
+print "\nTworzenie bag of words"
 for i in range(text_count):
     for word in texts[i]:
         if word not in bag_of_words.keys():
@@ -42,7 +49,7 @@ T = len(texts)
 
 # 4
 start_time = time.time()
-print "Tworzenie term-by-document matrix"
+print "\nTworzenie term-by-document matrix"
 term_by_document = lil_matrix((N, T))
 for i in range(text_count):
     for word in texts[i]:
@@ -54,7 +61,7 @@ for i in range(text_count):
 
 # 5
 start_time = time.time()
-print "Obliczanie inverse document frequency"
+print "\nObliczanie inverse document frequency"
 idf = [0]*N
 for i in range(N):
     idf[i] = term_by_document[i, :].getnnz()
@@ -63,7 +70,7 @@ for i in range(N):
 
 # przemnazanie przez IDF
 start_time = time.time()
-print "Normalization with IDF"
+print "\nNormalization with IDF"
 for i in range(N):
     for j in range(T):
         term_by_document[i, j] *= idf[i]
@@ -71,7 +78,7 @@ for i in range(N):
 
 # 8
 start_time = time.time()
-print "Low-rank approximation with SVD"
+print "\nLow-rank approximation with SVD"
 (U, S, V) = svd(term_by_document, k=k)              # low rank approximation
 term_by_document = lil_matrix(U.dot(diag(S)).dot(V))
 print "Full time: " + (time.time() - start_time)*1000
@@ -88,7 +95,7 @@ for i in range(T):                                  # normalization - BOW-vector
 #########################################
 
 # 6
-print "Wyszukiwanie"
+print "\nWyszukiwanie"
 query_vector = lil_matrix((N, 1))
 for word in prepare(query):                         # preparing query vector
     query_vector[bag_of_words[word], 0] += 1
@@ -113,4 +120,4 @@ max = sorted(data)[(text_count-k):]
 for i in range(text_count):
     if result[0, i] in max:
         print i
-print "Total: " + (time.time() - time)*1000
+print "Total: " + str((time.time() - time)*1000)
