@@ -46,6 +46,7 @@ for i in range(text_count):
             bag_of_words[word] = len(bag_of_words)
     update_progress(i, text_count, time.time() - start_time)
 
+
 N = len(bag_of_words)
 T = len(texts)
 
@@ -57,9 +58,8 @@ for i in range(text_count):
     for word in texts[i]:
         term_by_document[bag_of_words[word], i] += 1
     update_progress(i, text_count, time.time() - start_time)
+print term_by_document
 
-# N = len(bag_of_words)
-# T = len(texts)
 # 5
 start_time = time.time()
 print "\nObliczanie inverse document frequency"
@@ -68,7 +68,7 @@ for i in range(N):
     idf[i] = term_by_document[i, :].getnnz()
     idf[i] = numpy.log(T / idf[i])
     update_progress(i, N, time.time() - start_time)
-
+print idf
 # przemnazanie przez IDF
 start_time = time.time()
 print "\nNormalizacja z uzyciem inverse document frequency"
@@ -102,7 +102,7 @@ query_vector = lil_matrix((N, 1))
 for word in prepare(query):
     query_vector[bag_of_words[word], 0] += 1
 
-print query_vector
+
 
 for i in range(N):
     try:
@@ -110,7 +110,6 @@ for i in range(N):
     except KeyError:
         pass
 
-print query_vector
 
 query_length = query_vector.getnnz()
 if query_length == 0:
