@@ -1,29 +1,28 @@
-import parser
 import os
-import scipy
-import scipy.sparse
-import scipy.sparse.linalg
+from scipy.sparse import dok_matrix, linalg
 import math
 import numpy as np
 import subprocess
 import porterStemmer as ps
 import time
+import warnings
+
+warnings.filterwarnings('ignore')
 
 dirName = 'text'
-docNames = []
-translation_table = dict.fromkeys(map(ord, '!:,;\"\'\r\n()%?.`<>-'), None)
-kNum = 5
-k = 4
+translation_table = dict.fromkeys(map(ord, '\\!{}:,;\"\'\r\n()%?.`<>-'), None)
+SVDk1 = 5
+SVDk2 = 4
 
 def update_progress(progress, max, time):
-    proc = (100 * progress) / (max-1)
-    print('\r[{0}]{4}% {1}/{2} time: {3}ms'.format('#' * int(proc / 5), progress, max - 1, time * 1000, proc), end="")
+    percent = (100 * progress) / (max-1)
+    print('\r[{0}]{4}% {1}/{2} time: {3}ms'.format('#' * int(percent / 5), progress, max - 1, time * 1000, percent), end="")
 
-#parsowanie i zwracanie bag_of_words i term_by_document
+
 #1, 2, 3
 def parse(filename, term_by_document):
-    bag_of_words = dict()
-    f = subprocess.check_output(["./stemmer", filename]).decode("utf-8").splitlines()
+    bag_of_words = {}
+    f = subprocess.check_output(["./stem", filename]).decode("utf-8").splitlines()
 
     for i in f:
         words = i.split(' ')
@@ -38,22 +37,20 @@ def parse(filename, term_by_document):
                 bag_of_words[word] = 1
     return bag_of_words, term_by_document
 
-def makeTermAndBags(directory, term):
+def read_and_parse(directory, term):
     i = 0
     bag_of_words_list = [{}] * len(os.listdir(directory))
     start_time = time.time()
     for name in os.listdir(directory):
-        currFile = directory + "/" + name
-        if os.path.isfile(currFile):
-            docNames.append(currFile)
-            bag_of_words_list[i], term = parse(currFile, term)
-            i += 1
-        update_progress(i, len(os.listdir(directory)), time.time() - start_time)
+        file_name = directory + "/" + name
+        bag_of_words_list[i], term = parse(file_name, term)
+        i += 1
+        update_progress(i-1, len(os.listdir(directory)), time.time() - start_time)
     return bag_of_words_list, term
 
 #4
 def create_A_matrix(bag_of_words, term_by_document):
-    A = scipy.sparse.dok_matrix((len(term_by_document), len(bag_of_words)))
+    A = dok_matrix((len(term_by_document), len(bag_of_words)))
     mapper = {}
     i = 0
     start_time = time.time()
@@ -81,26 +78,21 @@ def idf_for_bag_list(bag_of_word_list, term_by_document):
     return bag_of_word_list
 
 
-def idf_for_word(word, bagList):
-    N = len(bagList)
+def idf_for_word(word, bag_of_words_list):
+    N = len(bag_of_words_list)
     nw = 0.0
     for i in range(N):
-        if word in bagList[i] and bagList[i][word] > 0:
+        if word in bag_of_words_list[i] and bag_of_words_list[i][word] > 0:
             nw += 1.0
     return math.log(N * 1.0 / nw)
 
-#6
-def probability(q, d):
+#6, 7
+def probability_first_eq(q, d):
     qT = np.array(q).transpose()
-    try:
-        matrix = np.dot(qT, d) / (np.linalg.norm(qT) * np.linalg.norm(d))
-    except:
-        pass
+    return np.dot(qT, d) / (np.linalg.norm(qT) * np.linalg.norm(d))
 
-    return matrix
-
-#7
-def probability2(q, A, i):
+#8
+def probability_second_eq(q, A, i):
     ei = [0] * len(A)
 
     for k in range(len(ei)):
@@ -113,12 +105,13 @@ def probability2(q, A, i):
 
 def query(matrix, data, A):
     (x,y) = A.get_shape()
+    start_time = time.time()
     for i in range(y):
         b = [0] * x
         for c in range(x):
             b[c] = A[c, i]
-        data[i] = probability(matrix, b)
-
+        data[i] = probability_first_eq(matrix, b)
+        update_progress(i, y, time.time() - start_time)
     return data
 
 
@@ -128,20 +121,14 @@ def querySVD(matrix, probs, A, U, S, V, svdCount):
         S2[i] = 0
     nA = U.dot(np.diag(S2)).dot(V)
     for i in range(A.get_shape()[1]):
-        probs[i] = probability2(matrix, nA, i)
+        probs[i] = probability_second_eq(matrix, nA, i)
     del nA
     return probs
 
 
-"""
-Przetwarza zdanie wejsciowe na wektor bag-of-words.
-"""
-
-
-def preProcess2(q, A, mapper, term):
-    p = dict()
-    #Najpierw stemming
-    q = preProcessQuery(q)
+def process_query(q, A, mapper, term):
+    p = {}
+    q = parse_query(q)
 
     for k in term:
         p[k] = 0
@@ -155,76 +142,50 @@ def preProcess2(q, A, mapper, term):
         matrix[mapper[k]] = p[k]
     return matrix, probs
 
-
-"""
-Wyszukuje indeks dla maksymalnej wartosci
-"""
-
-
-def findMaxIndex(result):
-    maxer = max(result)
-    for i in range(len(result)):
-        if result[i] == maxer:
-            return i
-    return 0
-
-
-"""
-Wykonuje stemming na wektorze wejsciowym
-"""
-
-
-def preProcessQuery(q):
+def parse_query(q):
     stem = ps.PorterStemmer()
     for k in range(len(q)):
         q[k] = q[k].translate(translation_table).lower()
         q[k] = stem.stem(q[k], 0, len(q[k]) - 1)
     return q
 
-
-"""
-Zwraca 5 najlepszych wynikow.
-"""
-
-
-def giveAnswer(probs):
-    const = 5
-    b = list(probs)
-    b.sort()
-    results = [0] * const
+def prepareOutput(data):
+    how_many = 5
     j = 0
-    for i in range(len(b) - const, len(b)):
+    b = list(data)
+    b.sort()
+    results = [0] * how_many
+    for i in range(len(b) - how_many, len(b)):
         results[j] = b[i]
         j += 1
 
-    resultsNames = [dict()] * const
+    resultsOut = [{}] * how_many
     for i in range(len(results)):
-        resultsNames[i] = {docNames[probs.index(results[i])], probs[probs.index(results[i])]}
+        resultsOut[i] = {data[data.index(results[i])]}
 
-    return resultsNames
+    return resultsOut
 
-
-term = set()
+main_start_time = time.time()
+term_by_document = set()
 print("Czytanie i parsowanie")
-bagList, term = makeTermAndBags(dirName, term)
+bag_of_words_list, term_by_document = read_and_parse(dirName, term_by_document)
 print("\nPrzetwarzanie inverse document frequency")
-bagList = idf_for_bag_list(bagList, term)
+bag_of_words_list = idf_for_bag_list(bag_of_words_list, term_by_document)
 print("\nTworzenie macierzy A")
-A, mapper = create_A_matrix(bagList, term)
+A, mapper = create_A_matrix(bag_of_words_list, term_by_document)
 print("\nSVD")
 #8
 start_time = time.time()
-U, S, V = scipy.sparse.linalg.svds(A, k=kNum)
+U, S, V = linalg.svds(A, k=SVDk1)
 print("Czas: " + str(time.time() - start_time))
-print("Gotowe")
+print("Gotowe. Pełny czas: " + str(time.time() - main_start_time) + "ms")
 q = input("Wyszukaj: ").split(' ')
-matrix, probs = preProcess2(q, A, mapper, term)
+matrix, probs = process_query(q, A, mapper, term_by_document)
+print("\nNormalizowanie")
 result = query(list(matrix), probs, A)
-print("Dokladnosc: " + str(max(result)))
-print("Nazwa pliku: " + docNames[findMaxIndex(result)])
-print("Inne wyniki: " + str(giveAnswer(result)))
+print("\nDokladnosc: " + str(max(result)))
+print("Inne wyniki: " + str(prepareOutput(result)))
 print("Uzywajac SVD:")
-result = querySVD(list(matrix), probs, A, U, S, V, k)
+result = querySVD(list(matrix), probs, A, U, S, V, SVDk2)
 print("Dokladnosc: " + str(max(result)))
-print("Nazwa pliku: " + docNames[findMaxIndex(result)])
-print(giveAnswer(result))
+print("Inne wyniki: " + str(prepareOutput(result)))

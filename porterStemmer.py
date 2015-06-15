@@ -15,7 +15,7 @@ See also http://www.tartarus.org/~martin/PorterStemmer
 The algorithm as described in the paper could be exactly replicated
 by adjusting the points of DEPARTURE, but this is barely necessary,
 because (a) the points of DEPARTURE are definitely improvements, and
-(b) no encoding of the Porter stemmer I have seen is anything like
+(b) no encoding of the Porter stem I have seen is anything like
 as exact as this version, even with the points of DEPARTURE!
 
 Vivake Gupta (v@nano.com)
@@ -376,9 +376,9 @@ class PorterStemmer:
         """In stem(p,i,j), p is a char pointer, and the string to be stemmed
         is from p[i] to p[j] inclusive. Typically i is zero and j is the
         offset to the last character of a string, (p[j+1] == '\0'). The
-        stemmer adjusts the characters p[i] ... p[j] and returns the new
+        stem adjusts the characters p[i] ... p[j] and returns the new
         end-point of the string, k. Stemming never increases word length, so
-        i <= k <= j. To turn the stemmer into a module, declare 'stem' as
+        i <= k <= j. To turn the stem into a module, declare 'stem' as
         extern, and delete the remainder of this file.
         """
         # copy the parameters into statics
