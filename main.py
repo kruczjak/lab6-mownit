@@ -4,13 +4,14 @@ import math
 import numpy as np
 import subprocess
 import porterStemmer as ps
+import copy
 import time
 import warnings
 
-warnings.filterwarnings('ignore')
+# warnings.filterwarnings('ignore')
 
 dirName = 'text'
-translation_table = dict.fromkeys(map(ord, '\\!{}:,;\"\'\r\n()%?.`<>-'), None)
+delete_table = dict.fromkeys(map(ord, '!:,;\"\'\r\n()%?.`<>-'), None)
 SVDk1 = 5
 SVDk2 = 4
 
@@ -22,12 +23,12 @@ def update_progress(progress, max, time):
 #1, 2, 3
 def parse(filename, term_by_document):
     bag_of_words = {}
-    f = subprocess.check_output(["./stem", filename]).decode("utf-8").splitlines()
+    f = subprocess.check_output(["./stemmer", filename]).decode("utf-8").splitlines()
 
     for i in f:
         words = i.split(' ')
         for word in range(len(words)):
-            words[word] = words[word].translate(translation_table).lower()
+            words[word] = words[word].translate(delete_table).lower()
             term_by_document.add(words[word])
 
         for word in words:
@@ -35,6 +36,7 @@ def parse(filename, term_by_document):
                 bag_of_words[word] += 1
             else:
                 bag_of_words[word] = 1
+
     return bag_of_words, term_by_document
 
 def read_and_parse(directory, term):
@@ -74,7 +76,7 @@ def idf_for_bag_list(bag_of_word_list, term_by_document):
     for i in range(len(bag_of_word_list)):
         for word in bag_of_word_list[i].keys():
             bag_of_word_list[i][word] *= 1.0 * idf[word]
-        update_progress(i, len(bag_of_word_list), time.time() - start_time)
+    update_progress(i, len(bag_of_word_list), time.time() - start_time)
     return bag_of_word_list
 
 
@@ -116,38 +118,41 @@ def query(matrix, data, A):
 
 
 def querySVD(matrix, probs, A, U, S, V, svdCount):
+    start_time = time.time()
     S2 = S
     for i in range(svdCount + 1, len(S2)):
         S2[i] = 0
     nA = U.dot(np.diag(S2)).dot(V)
     for i in range(A.get_shape()[1]):
         probs[i] = probability_second_eq(matrix, nA, i)
+        update_progress(i, A.get_shape()[1], time.time() - start_time)
     del nA
     return probs
 
 
-def process_query(q, A, mapper, term):
-    p = {}
-    q = parse_query(q)
+def process_query(q_query, A_query, mapper_query, term_of_document):
+    p = dict()
+    q_query = parse_query(q_query)
 
-    for k in term:
-        p[k] = 0
-    for k in q:
-        if k in p:
-            p[k] += 1
+    for word in term_of_document:
+        p[word] = 0
+    for word in q_query:
+        if word in p:
+            p[word] += 1
 
-    matrix = [0] * len(mapper)
-    probs = [0] * A.get_shape()[1]
-    for k in p:
-        matrix[mapper[k]] = p[k]
-    return matrix, probs
 
-def parse_query(q):
+    matrix_query = [0] * len(mapper_query)
+    probs_query = [0] * A_query.get_shape()[1]
+    for word in p:
+        matrix_query[mapper_query[word]] = p[word]
+    return matrix_query, probs_query
+
+def parse_query(q_query):
     stem = ps.PorterStemmer()
-    for k in range(len(q)):
-        q[k] = q[k].translate(translation_table).lower()
-        q[k] = stem.stem(q[k], 0, len(q[k]) - 1)
-    return q
+    for k in range(len(q_query)):
+        q_query[k] = q_query[k].translate(delete_table).lower()
+        q_query[k] = stem.stem(q_query[k], 0, len(q_query[k]) - 1)
+    return q_query
 
 def prepareOutput(data):
     how_many = 5
@@ -177,8 +182,8 @@ print("\nSVD")
 #8
 start_time = time.time()
 U, S, V = linalg.svds(A, k=SVDk1)
-print("Czas: " + str(time.time() - start_time))
-print("Gotowe. Pełny czas: " + str(time.time() - main_start_time) + "ms")
+print("Czas: " + str((time.time() - start_time)*1000) + "ms")
+print("Gotowe. Pelny czas: " + str((time.time() - main_start_time)*1000) + "ms")
 q = input("Wyszukaj: ").split(' ')
 matrix, probs = process_query(q, A, mapper, term_by_document)
 print("\nNormalizowanie")
@@ -187,5 +192,5 @@ print("\nDokladnosc: " + str(max(result)))
 print("Inne wyniki: " + str(prepareOutput(result)))
 print("Uzywajac SVD:")
 result = querySVD(list(matrix), probs, A, U, S, V, SVDk2)
-print("Dokladnosc: " + str(max(result)))
+print("\nDokladnosc: " + str(max(result)))
 print("Inne wyniki: " + str(prepareOutput(result)))
