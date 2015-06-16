@@ -14,6 +14,15 @@ dirName = 'text'
 delete_table = dict.fromkeys(map(ord, '!:,;\"\'\r\n()%?.`<>-'), None)
 SVDk1 = 5
 SVDk2 = 4
+k = 0
+docs = []
+
+def findMaxIndex(result):
+    maxer = max(result)
+    for i in range(len(result)):
+        if result[i] == maxer:
+            return i
+    return 0
 
 def update_progress(progress, max, time):
     percent = (100 * progress) / (max-1)
@@ -22,6 +31,7 @@ def update_progress(progress, max, time):
 
 #1, 2, 3
 def parse(filename, term_by_document):
+    global k
     bag_of_words = {}
     f = subprocess.check_output(["./stemmer", filename]).decode("utf-8").splitlines()
 
@@ -36,7 +46,7 @@ def parse(filename, term_by_document):
                 bag_of_words[word] += 1
             else:
                 bag_of_words[word] = 1
-
+    k = k + len(bag_of_words)
     return bag_of_words, term_by_document
 
 def read_and_parse(directory, term):
@@ -45,9 +55,11 @@ def read_and_parse(directory, term):
     start_time = time.time()
     for name in os.listdir(directory):
         file_name = directory + "/" + name
+        docs.append(file_name)
         bag_of_words_list[i], term = parse(file_name, term)
         i += 1
         update_progress(i-1, len(os.listdir(directory)), time.time() - start_time)
+    # print(i)
     return bag_of_words_list, term
 
 #4
@@ -89,7 +101,7 @@ def idf_for_word(word, bag_of_words_list):
     return math.log(N * 1.0 / nw)
 
 #6, 7
-def probability_first_eq(q, d):
+def probability_first_eq(q, d): #TODO use corelate() much faster
     qT = np.array(q).transpose()
     return np.dot(qT, d) / (np.linalg.norm(qT) * np.linalg.norm(d))
 
@@ -166,7 +178,7 @@ def prepareOutput(data):
 
     resultsOut = [{}] * how_many
     for i in range(len(results)):
-        resultsOut[i] = {data[data.index(results[i])]}
+        resultsOut[i] = {docs[data.index(data[i])], data[data.index(results[i])]}
 
     return resultsOut
 
@@ -175,6 +187,8 @@ term_by_document = set()
 print("Czytanie i parsowanie")
 bag_of_words_list, term_by_document = read_and_parse(dirName, term_by_document)
 print("\nPrzetwarzanie inverse document frequency")
+print("Number of words: " + k)
+
 bag_of_words_list = idf_for_bag_list(bag_of_words_list, term_by_document)
 print("\nTworzenie macierzy A")
 A, mapper = create_A_matrix(bag_of_words_list, term_by_document)
@@ -186,11 +200,15 @@ print("Czas: " + str((time.time() - start_time)*1000) + "ms")
 print("Gotowe. Pelny czas: " + str((time.time() - main_start_time)*1000) + "ms")
 q = input("Wyszukaj: ").split(' ')
 matrix, probs = process_query(q, A, mapper, term_by_document)
+
+
 print("\nNormalizowanie")
 result = query(list(matrix), probs, A)
 print("\nDokladnosc: " + str(max(result)))
+print("Nazwa pliku: " + docs[findMaxIndex(result)])
 print("Inne wyniki: " + str(prepareOutput(result)))
 print("Uzywajac SVD:")
 result = querySVD(list(matrix), probs, A, U, S, V, SVDk2)
 print("\nDokladnosc: " + str(max(result)))
+print("Nazwa pliku: " + docs[findMaxIndex(result)])
 print("Inne wyniki: " + str(prepareOutput(result)))
